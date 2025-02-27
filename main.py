@@ -7,53 +7,59 @@ import tkinter as tk
 from tkinter import scrolledtext, messagebox
 from kademlia.network import Server
 from kademlia.utils import digest
-import pyperclip  # Библиотека для работы с буфером обмена
+import pyperclip
+import nacl.utils
+from nacl.public import PrivateKey, Box
+import nacl.secret
+import nacl.hash
 
-# Генерация ключа для шифрования
-key = Fernet.generate_key()
-cipher_suite = Fernet(key)
+# Генерация ключей для шифрования
+private_key = PrivateKey.generate()
+public_key = private_key.public_key
 
 # Функция для шифрования сообщения
-def encrypt_message(message):
-    return cipher_suite.encrypt(message.encode())
+def encrypt_message(message, recipient_public_key):
+    box = Box(private_key, recipient_public_key)
+    encrypted = box.encrypt(message.encode())
+    return encrypted
 
 # Функция для расшифрования сообщения
-def decrypt_message(encrypted_message):
-    return cipher_suite.decrypt(encrypted_message).decode()
+def decrypt_message(encrypted_message, sender_public_key):
+    box = Box(private_key, sender_public_key)
+    decrypted = box.decrypt(encrypted_message)
+    return decrypted.decode()
 
 # Автоматическое определение IP-адреса
 def get_local_ip():
     try:
-        # Создаем временный сокет для получения IP-адреса
         temp_sock = socket.socket(socket.AF_INET, socket.SOCK_DGRAM)
-        temp_sock.connect(("8.8.8.8", 80))  # Подключаемся к публичному DNS
+        temp_sock.connect(("8.8.8.8", 80))
         local_ip = temp_sock.getsockname()[0]
         temp_sock.close()
         return local_ip
     except Exception:
-        return "127.0.0.1"  # Возвращаем localhost, если не удалось определить IP
+        return "127.0.0.1"
 
 # Автоматический выбор свободного порта
 def get_free_port(start_port=12345):
     port = start_port
     while True:
         try:
-            # Пытаемся занять порт
             temp_sock = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
             temp_sock.bind(("0.0.0.0", port))
             temp_sock.close()
             return port
         except OSError:
-            port += 1  # Пробуем следующий порт
+            port += 1
 
 # Класс для P2P-мессенджера
 class P2PMessenger:
     def __init__(self):
-        self.host = get_local_ip()  # Автоматическое определение IP
-        self.port = get_free_port()  # Автоматический выбор порта
+        self.host = get_local_ip()
+        self.port = get_free_port()
         self.user_id = None
-        self.private_key = ec.generate_private_key(ec.SECP256R1())
-        self.public_key = self.private_key.public_key()
+        self.private_key = private_key
+        self.public_key = public_key
         self.contacts = {}
         self.sock = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
         self.sock.bind((self.host, self.port))
@@ -63,20 +69,17 @@ class P2PMessenger:
 
         # Инициализация DHT
         self.dht_server = Server()
-        self.dht_server.listen(8468)  # Порт для DHT
+        self.dht_server.listen(8468)
         threading.Thread(target=self.bootstrap_dht).start()
 
     # Подключение к DHT
     def bootstrap_dht(self):
-        self.dht_server.bootstrap([("127.0.0.1", 8468)])  # Bootstrap к локальному узлу
+        self.dht_server.bootstrap([("127.0.0.1", 8468)])
 
     # Генерация ID на основе открытого ключа
     def generate_user_id(self):
-        public_key_bytes = self.public_key.public_bytes(
-            encoding=serialization.Encoding.PEM,
-            format=serialization.PublicFormat.SubjectPublicKeyInfo
-        )
-        return digest(public_key_bytes).hex()  # Используем хеш от открытого ключа как ID
+        public_key_bytes = self.public_key.__bytes__()
+        return digest(public_key_bytes).hex()
 
     # Ожидание подключения
     def wait_for_connection(self):
@@ -87,26 +90,27 @@ class P2PMessenger:
     # Отправка сообщения
     def send_message(self, contact_id, message):
         if contact_id in self.contacts:
-            encrypted_message = encrypt_message(message)
-            self.contacts[contact_id].send(encrypted_message)
+            recipient_public_key = self.contacts[contact_id]['public_key']
+            encrypted_message = encrypt_message(message, recipient_public_key)
+            self.contacts[contact_id]['socket'].send(encrypted_message)
 
     # Получение сообщения
     def receive_message(self):
         if self.connection:
             encrypted_message = self.connection.recv(1024)
             if encrypted_message:
-                return decrypt_message(encrypted_message)
+                sender_public_key = self.connection.getpeername()
+                return decrypt_message(encrypted_message, sender_public_key)
         return None
 
     # Добавление контакта по ID
     def add_contact(self, contact_id):
-        # Поиск контакта через DHT
         contact_info = self.dht_server.get(contact_id)
         if contact_info:
-            contact_host, contact_port = contact_info.split(":")
+            contact_host, contact_port, contact_public_key = contact_info.split(":")
             contact_sock = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
             contact_sock.connect((contact_host, int(contact_port)))
-            self.contacts[contact_id] = contact_sock
+            self.contacts[contact_id] = {'socket': contact_sock, 'public_key': contact_public_key}
             print(f"Контакт {contact_id} добавлен.")
             return True
         else:
@@ -116,7 +120,7 @@ class P2PMessenger:
     # Регистрация в DHT
     def register_in_dht(self):
         self.user_id = self.generate_user_id()
-        self.dht_server.set(self.user_id, f"{self.host}:{self.port}")
+        self.dht_server.set(self.user_id, f"{self.host}:{self.port}:{self.public_key.__bytes__().hex()}")
         print(f"Зарегистрирован в DHT с ID: {self.user_id}")
 
 # Графический интерфейс
