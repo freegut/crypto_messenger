@@ -73,10 +73,13 @@ class AuthGUI:
             user_id = register_user(username, password)
             if user_id:
                 messagebox.showinfo("Успех", f"Пользователь {username} зарегистрирован с ID: {user_id}")
+                print(f"Пользователь {username} зарегистрирован с ID: {user_id}")  # Отладочное сообщение
             else:
                 messagebox.showerror("Ошибка", "Пользователь уже существует!")
+                print("Пользователь уже существует!")  # Отладочное сообщение
         else:
             messagebox.showerror("Ошибка", "Введите логин и пароль!")
+            print("Введите логин и пароль!")  # Отладочное сообщение
 
     def run(self):
         self.root.mainloop()

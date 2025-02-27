@@ -12,6 +12,7 @@ def init_db():
     conn.close()
 
 def register_user(username, password):
+    init_db()  # Инициализация базы данных перед использованием
     conn = sqlite3.connect('users.db')
     c = conn.cursor()
     hashed_password = hashlib.sha256(password.encode()).hexdigest()
@@ -26,6 +27,7 @@ def register_user(username, password):
         return None  # Пользователь уже существует
 
 def authenticate_user(username, password):
+    init_db()  # Инициализация базы данных перед использованием
     conn = sqlite3.connect('users.db')
     c = conn.cursor()
     hashed_password = hashlib.sha256(password.encode()).hexdigest()
