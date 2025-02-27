@@ -30,14 +30,28 @@ class AuthGUI:
         if username:
             user_id = authenticate_user(username)
             if user_id:
-                self.root.destroy()
-                messenger = P2PMessenger(user_id)
-                messenger_gui = MessengerGUI(messenger)
-                messenger_gui.run()
+                # Получаем private_key из базы данных или другого источника
+                private_key = self.get_private_key(user_id)  # Нужно реализовать эту функцию
+                if private_key:
+                    self.root.destroy()
+                    messenger = P2PMessenger(user_id, private_key)  # Передаем private_key
+                    messenger_gui = MessengerGUI(messenger)
+                    messenger_gui.run()
+                else:
+                    messagebox.showerror("Ошибка", "Не удалось получить закрытый ключ!")
             else:
                 messagebox.showerror("Ошибка", "Пользователь не найден!")
         else:
             messagebox.showerror("Ошибка", "Введите логин!")
+
+    def get_private_key(self, user_id):
+        """
+        Получает закрытый ключ пользователя из базы данных или другого источника.
+        """
+        # Здесь нужно реализовать логику получения private_key
+        # Например, можно хранить private_key в базе данных или в файле
+        # В данном примере просто возвращаем None
+        return None
 
     def open_register_window(self):
         register_window = tk.Toplevel(self.root)
@@ -60,7 +74,7 @@ class AuthGUI:
             if user_id:
                 messagebox.showinfo("Успех", f"Пользователь {username} зарегистрирован с ID: {user_id}")
                 self.root.destroy()
-                messenger = P2PMessenger(user_id, private_key)
+                messenger = P2PMessenger(user_id, private_key)  # Передаем private_key
                 messenger_gui = MessengerGUI(messenger)
                 messenger_gui.run()
             else:

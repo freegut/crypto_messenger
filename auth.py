@@ -12,6 +12,7 @@ def init_db():
     c.execute('''CREATE TABLE IF NOT EXISTS users
                  (id TEXT PRIMARY KEY,
                   public_key TEXT,
+                  private_key TEXT,
                   username TEXT UNIQUE)''')
     conn.commit()
     conn.close()
@@ -43,13 +44,20 @@ def register_user(username):
     init_db()  # Убедимся, что база данных инициализирована
     public_key_hex, private_key = generate_user_id()
     
+    # Сериализуем закрытый ключ в строку
+    private_key_pem = private_key.private_bytes(
+        encoding=serialization.Encoding.PEM,
+        format=serialization.PrivateFormat.PKCS8,
+        encryption_algorithm=serialization.NoEncryption()
+    ).decode('utf-8')
+    
     conn = sqlite3.connect('users.db')
     c = conn.cursor()
     
     try:
         # Пытаемся добавить нового пользователя
-        c.execute("INSERT INTO users (id, public_key, username) VALUES (?, ?, ?)",
-                  (public_key_hex, public_key_hex, username))
+        c.execute("INSERT INTO users (id, public_key, private_key, username) VALUES (?, ?, ?, ?)",
+                  (public_key_hex, public_key_hex, private_key_pem, username))
         conn.commit()
         conn.close()
         return public_key_hex, private_key
@@ -76,6 +84,32 @@ def authenticate_user(username):
     
     conn.close()
     return user[0] if user else None
+
+def get_private_key(user_id):
+    """
+    Получает закрытый ключ пользователя по его ID.
+    Аргументы:
+        - user_id: ID пользователя.
+    Возвращает:
+        - private_key: закрытый ключ для шифрования.
+        - None: если пользователь не найден.
+    """
+    init_db()  # Убедимся, что база данных инициализирована
+    conn = sqlite3.connect('users.db')
+    c = conn.cursor()
+    
+    c.execute("SELECT private_key FROM users WHERE id = ?", (user_id,))
+    private_key_pem = c.fetchone()
+    
+    conn.close()
+    
+    if private_key_pem:
+        # Десериализуем закрытый ключ из строки
+        return serialization.load_pem_private_key(
+            private_key_pem[0].encode('utf-8'),
+            password=None
+        )
+    return None
 
 def get_all_users():
     """
