@@ -1,22 +1,23 @@
 import os
+from encryption import encrypt_message, decrypt_message
 
-def send_file(sock, file_path):
+def send_file(sock, private_key, public_key, file_path):
     file_name = os.path.basename(file_path)
     file_size = os.path.getsize(file_path)
-    sock.send(f"FILE:{file_name}:{file_size}".encode())
     with open(file_path, 'rb') as file:
-        sock.sendfile(file)
+        file_data = file.read()
+    encrypted_data = encrypt_message(private_key, public_key, file_data.decode())
+    sock.send(f"FILE:{file_name}:{file_size}".encode())
+    sock.send(encrypted_data)
     print(f"Файл {file_name} отправлен.")
 
-def receive_file(sock):
+def receive_file(sock, private_key, public_key):
     file_info = sock.recv(1024).decode()
     if file_info.startswith("FILE:"):
         _, file_name, file_size = file_info.split(":")
         file_size = int(file_size)
+        encrypted_data = sock.recv(file_size)
+        decrypted_data = decrypt_message(private_key, public_key, encrypted_data)
         with open(file_name, 'wb') as file:
-            remaining = file_size
-            while remaining > 0:
-                data = sock.recv(min(remaining, 4096))
-                file.write(data)
-                remaining -= len(data)
+            file.write(decrypted_data)
         print(f"Файл {file_name} получен.")

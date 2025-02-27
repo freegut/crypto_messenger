@@ -1,8 +1,8 @@
 import tkinter as tk
 from tkinter import messagebox
-from auth import register_user, authenticate_user
+from auth import register_user, authenticate_user, get_all_users
 from messenger import P2PMessenger
-from messenger_gui import MessengerGUI  # Импорт из нового файла
+from messenger_gui import MessengerGUI
 
 class AuthGUI:
     def __init__(self):
@@ -17,12 +17,6 @@ class AuthGUI:
         self.username_entry = tk.Entry(self.root)
         self.username_entry.pack(padx=10, pady=5)
 
-        # Поле для ввода пароля
-        self.password_label = tk.Label(self.root, text="Пароль:")
-        self.password_label.pack(padx=10, pady=5)
-        self.password_entry = tk.Entry(self.root, show="*")
-        self.password_entry.pack(padx=10, pady=5)
-
         # Кнопка входа
         self.login_button = tk.Button(self.root, text="Войти", command=self.login)
         self.login_button.pack(padx=10, pady=10)
@@ -33,18 +27,17 @@ class AuthGUI:
 
     def login(self):
         username = self.username_entry.get()
-        password = self.password_entry.get()
-        if username and password:
-            user_id = authenticate_user(username, password)
+        if username:
+            user_id = authenticate_user(username)
             if user_id:
                 self.root.destroy()
                 messenger = P2PMessenger(user_id)
                 messenger_gui = MessengerGUI(messenger)
                 messenger_gui.run()
             else:
-                messagebox.showerror("Ошибка", "Неверный логин или пароль!")
+                messagebox.showerror("Ошибка", "Пользователь не найден!")
         else:
-            messagebox.showerror("Ошибка", "Введите логин и пароль!")
+            messagebox.showerror("Ошибка", "Введите логин!")
 
     def open_register_window(self):
         register_window = tk.Toplevel(self.root)
@@ -56,30 +49,24 @@ class AuthGUI:
         self.reg_username_entry = tk.Entry(register_window)
         self.reg_username_entry.pack(padx=10, pady=5)
 
-        # Поле для ввода пароля
-        reg_password_label = tk.Label(register_window, text="Пароль:")
-        reg_password_label.pack(padx=10, pady=5)
-        self.reg_password_entry = tk.Entry(register_window, show="*")
-        self.reg_password_entry.pack(padx=10, pady=5)
-
         # Кнопка регистрации
         reg_button = tk.Button(register_window, text="Зарегистрироваться", command=self.register)
         reg_button.pack(padx=10, pady=10)
 
     def register(self):
         username = self.reg_username_entry.get()
-        password = self.reg_password_entry.get()
-        if username and password:
-            user_id = register_user(username, password)
+        if username:
+            user_id, private_key = register_user(username)
             if user_id:
                 messagebox.showinfo("Успех", f"Пользователь {username} зарегистрирован с ID: {user_id}")
-                print(f"Пользователь {username} зарегистрирован с ID: {user_id}")  # Отладочное сообщение
+                self.root.destroy()
+                messenger = P2PMessenger(user_id, private_key)
+                messenger_gui = MessengerGUI(messenger)
+                messenger_gui.run()
             else:
                 messagebox.showerror("Ошибка", "Пользователь уже существует!")
-                print("Пользователь уже существует!")  # Отладочное сообщение
         else:
-            messagebox.showerror("Ошибка", "Введите логин и пароль!")
-            print("Введите логин и пароль!")  # Отладочное сообщение
+            messagebox.showerror("Ошибка", "Введите логин!")
 
     def run(self):
         self.root.mainloop()

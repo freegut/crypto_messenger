@@ -1,23 +1,24 @@
 import socket
 import threading
 from dht import DHTServer
+from network import Network
 from encryption import encrypt_message, decrypt_message
 
 class P2PMessenger:
-    def __init__(self, user_id):
+    def __init__(self, user_id, private_key):
         self.user_id = user_id
+        self.private_key = private_key
         self.host = self.get_local_ip()
         self.port = self.get_free_port()
-        self.contacts = {}
-        self.sock = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
-        self.sock.bind((self.host, self.port))
-        self.sock.listen(5)
-        self.connection = None
-        self.address = None
-
-        # Инициализация DHT
+        self.network = Network(self.host, self.port, self.private_key)
         self.dht_server = DHTServer()
-        threading.Thread(target=self.dht_server.bootstrap).start()
+
+        # Запуск сервера в отдельном потоке
+        threading.Thread(target=self.network.start_server).start()
+
+        # Регистрация в DHT
+        asyncio.run(self.dht_server.bootstrap())
+        asyncio.run(self.dht_server.register_user(self.user_id, self.host, self.port))
 
     def get_local_ip(self):
         try:
@@ -40,36 +41,13 @@ class P2PMessenger:
             except OSError:
                 port += 1
 
-    def wait_for_connection(self):
-        print("Ожидание подключения...")
-        self.connection, self.address = self.sock.accept()
-        print(f"Подключен: {self.address}")
-
-    def send_message(self, contact_id, message):
-        if contact_id in self.contacts:
-            encrypted_message = encrypt_message(message)
-            self.contacts[contact_id]['socket'].send(encrypted_message)
-
-    def receive_message(self):
-        if self.connection:
-            encrypted_message = self.connection.recv(1024)
-            if encrypted_message:
-                return decrypt_message(encrypted_message)
-        return None
-
-    def add_contact(self, contact_id):
-        contact_info = self.dht_server.get(contact_id)
-        if contact_info:
-            contact_host, contact_port = contact_info.split(":")
-            contact_sock = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
-            contact_sock.connect((contact_host, int(contact_port)))
-            self.contacts[contact_id] = {'socket': contact_sock}
-            print(f"Контакт {contact_id} добавлен.")
-            return True
+    def send_message(self, user_id, message):
+        """
+        Отправляет сообщение другому пользователю.
+        """
+        user_info = asyncio.run(self.dht_server.find_user(user_id))
+        if user_info:
+            host, port = user_info.split(":")
+            self.network.send_message(host, int(port), user_id, message)
         else:
-            print(f"Контакт {contact_id} не найден.")
-            return False
-
-    def register_in_dht(self):
-        self.dht_server.set(self.user_id, f"{self.host}:{self.port}")
-        print(f"Зарегистрирован в DHT с ID: {self.user_id}")
+            print(f"Пользователь {user_id} не найден.")
