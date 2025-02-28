@@ -1,6 +1,9 @@
 import os
 from encryption import encrypt_message, decrypt_message
 
+
+def 
+
 def send_file(sock, private_key, public_key, file_path):
     file_name = os.path.basename(file_path)
     file_size = os.path.getsize(file_path)
