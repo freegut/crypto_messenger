@@ -55,6 +55,7 @@ def register_user(username):
     c = conn.cursor()
     
     try:
+        #comment
         # Пытаемся добавить нового пользователя
         c.execute("INSERT INTO users (id, public_key, private_key, username) VALUES (?, ?, ?, ?)",
                   (public_key_hex, public_key_hex, private_key_pem, username))
@@ -161,6 +162,5 @@ def delete_user(user_id):
     c.execute("DELETE FROM users WHERE id = ?", (user_id,))
     conn.commit()
     rows_affected = c.rowcount
-    
     conn.close()
     return rows_affected > 0
